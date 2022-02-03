@@ -53,12 +53,21 @@ namespace CSE.ImdbImport
 
             Console.WriteLine("Creating Composite Indices");
 
-            // get the Cosmos values from args[]
-            string cosmosUrl = string.Format(CultureInfo.InvariantCulture, "https://{0}.documents.azure.com:443/", args[0].Trim());
+            string cosmosUrl = "";
+            if ( args[0].StartsWith("https://", StringComparison.InvariantCulture) || args[0].StartsWith("http://", StringComparison.InvariantCulture))
+            {
+                // use the provided url in the arg
+                cosmosUrl = args[0].Trim();
+            }
+            else
+            {
+                // get cosmos url from from cosmos name
+                cosmosUrl = string.Format(CultureInfo.InvariantCulture, "https://{0}.documents.azure.com:443/", args[0].Trim());
+            }
             string cosmosKey = args[1].Trim();
             string cosmosDatabase = args[2].Trim();
             string cosmosCollection = args[3].Trim();
-
+            Console.WriteLine("Cosmos Info:\n  URL: {0}\n  DB : {1}\n  COL: {3}", cosmosUrl, cosmosDatabase, cosmosCollection);
             try
             {
                 string path = GetDataFilesPath();
