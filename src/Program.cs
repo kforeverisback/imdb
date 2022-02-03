@@ -54,10 +54,12 @@ namespace CSE.ImdbImport
             Console.WriteLine("Creating Composite Indices");
 
             string cosmosUrl = "";
-            if ( args[0].StartsWith("https://", StringComparison.InvariantCulture) || args[0].StartsWith("http://", StringComparison.InvariantCulture))
+            bool isEmulator = false;
+            if ( args[0].StartsWith("emulator://", StringComparison.InvariantCulture))
             {
                 // use the provided url in the arg
-                cosmosUrl = args[0].Trim();
+                cosmosUrl = args[0].Trim().Replace("emulator","https", System.StringComparison.InvariantCultureIgnoreCase);
+                isEmulator = true;
             }
             else
             {
@@ -67,12 +69,12 @@ namespace CSE.ImdbImport
             string cosmosKey = args[1].Trim();
             string cosmosDatabase = args[2].Trim();
             string cosmosCollection = args[3].Trim();
-            Console.WriteLine("Cosmos Info:\n  URL: {0}\n  DB : {1}\n  COL: {3}", cosmosUrl, cosmosDatabase, cosmosCollection);
+            Console.WriteLine("Cosmos Info:\n  URL: {0}\n  DB : {1}\n  COL: {2}", cosmosUrl, cosmosDatabase, cosmosCollection);
             try
             {
                 string path = GetDataFilesPath();
 
-                client = await OpenCosmosClient(cosmosUrl, cosmosKey, cosmosDatabase, cosmosCollection).ConfigureAwait(false);
+                client = await OpenCosmosClient(cosmosUrl, cosmosKey, cosmosDatabase, cosmosCollection, isEmulator).ConfigureAwait(false);
 
                 // create composite indices if necessary
                 await CreateCompositeIndicesAsync(client, cosmosDatabase, cosmosCollection).ConfigureAwait(false);
@@ -204,7 +206,7 @@ namespace CSE.ImdbImport
             return path;
         }
 
-        static async Task<DocumentClient> OpenCosmosClient(string cosmosUrl, string cosmosKey, string cosmosDatabase, string cosmosCollection)
+        static async Task<DocumentClient> OpenCosmosClient(string cosmosUrl, string cosmosKey, string cosmosDatabase, string cosmosCollection, bool isEmulator = false)
         {
             // set min / max concurrent loaders
             SetLoaders();
@@ -227,9 +229,16 @@ namespace CSE.ImdbImport
             client = new DocumentClient(new Uri(cosmosUrl), cosmosKey, cp);
             await client.OpenAsync().ConfigureAwait(false);
 
-            // validate database and collection exist
-            await client.ReadDatabaseAsync("/dbs/" + cosmosDatabase).ConfigureAwait(false);
-            await client.ReadDocumentCollectionAsync("/dbs/" + cosmosDatabase + "/colls/" + cosmosCollection).ConfigureAwait(false);
+            if (isEmulator)
+            {
+                await client.CreateDatabaseIfNotExistsAsync(new Database{Id=cosmosDatabase}).ConfigureAwait(false);
+                await client.CreateDocumentCollectionIfNotExistsAsync($"/dbs/{cosmosDatabase}", new DocumentCollection{Id=cosmosCollection}).ConfigureAwait(false);
+            }
+            else
+            {
+                await client.ReadDatabaseAsync("/dbs/" + cosmosDatabase).ConfigureAwait(false);
+                await client.ReadDocumentCollectionAsync("/dbs/" + cosmosDatabase + "/colls/" + cosmosCollection).ConfigureAwait(false);
+            }
 
             return client;
         }
@@ -361,7 +370,9 @@ namespace CSE.ImdbImport
 
         static void Usage()
         {
-            Console.WriteLine("Usage: imdb-import CosmosServer CosmosKey Database Collection");
+            Console.WriteLine("Usage: imdb-import <CosmosServer> <CosmosKey> <Database> <Collection>");
+            Console.WriteLine("  ex. (azure cosmosDB) : imdb-import somecosmos-instances SECRET db cars");
+            Console.WriteLine("  ex. (cosmos emulator): imdb-import emulator://localhost:8081 SECRET car engine");
         }
     }
 }
